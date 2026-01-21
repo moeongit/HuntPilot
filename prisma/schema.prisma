@@ -1,0 +1,252 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ApplicationStatus {
+  APPLIED
+  OA
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActivityType {
+  APPLIED
+  CONTACTED
+  OA
+  INTERVIEW
+  OFFER
+  REJECTED
+  FOLLOW_UP
+  NOTE
+}
+
+enum InterviewOutcome {
+  PENDING
+  PASSED
+  FAILED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String?  @unique
+  image     String?
+  // NextAuth's Prisma adapter expects this field to exist.
+  emailVerified DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  applications      JobApplication[]
+  tags              Tag[]
+  activities        Activity[]
+  followUpTemplates FollowUpTemplate[]
+  followUps         FollowUp[]
+  interviewRounds   InterviewRound[]
+  checklistItems    ChecklistItem[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model JobApplication {
+  id              String            @id @default(cuid())
+  userId          String
+  company         String
+  role            String
+  location        String
+  applicationLink String
+  status          ApplicationStatus
+  priority        Priority          @default(MEDIUM)
+  salaryRange     String?
+  dateApplied     DateTime
+  lastContacted   DateTime?
+  notes           String?
+  source          String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tags            ApplicationTag[]
+  activities      Activity[]
+  followUps       FollowUp[]
+  interviewRounds InterviewRound[]
+  checklist       ChecklistItem[]
+
+  @@index([userId, status])
+  @@index([userId, dateApplied])
+  @@index([userId, lastContacted])
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications ApplicationTag[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model ApplicationTag {
+  applicationId String
+  tagId         String
+  createdAt     DateTime @default(now())
+
+  application JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  tag         Tag            @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([applicationId, tagId])
+  @@index([tagId])
+}
+
+model Activity {
+  id            String       @id @default(cuid())
+  userId        String
+  applicationId String
+  type          ActivityType
+  title         String
+  occurredAt    DateTime
+  metadata      Json?
+  createdAt     DateTime     @default(now())
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt])
+  @@index([applicationId, occurredAt])
+  @@index([applicationId, type])
+}
+
+model FollowUpTemplate {
+  id        String             @id @default(cuid())
+  userId    String
+  status    ApplicationStatus?
+  title     String
+  body      String
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  followUps FollowUp[]
+
+  @@index([userId, status])
+}
+
+model FollowUp {
+  id            String    @id @default(cuid())
+  userId        String
+  applicationId String
+  dueAt         DateTime
+  completedAt   DateTime?
+  templateId    String?
+  message       String?
+  createdAt     DateTime  @default(now())
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application JobApplication    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  template    FollowUpTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([userId, dueAt])
+  @@index([applicationId, dueAt])
+  @@index([userId, completedAt])
+}
+
+model InterviewRound {
+  id            String           @id @default(cuid())
+  userId        String
+  applicationId String
+  roundNumber   Int
+  scheduledAt   DateTime?
+  notes         String?
+  outcome       InterviewOutcome @default(PENDING)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application JobApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  checklist   ChecklistItem[]
+
+  @@unique([applicationId, roundNumber])
+  @@index([userId, applicationId])
+}
+
+model ChecklistItem {
+  id            String   @id @default(cuid())
+  userId        String
+  applicationId String
+  roundId       String?
+  text          String
+  isDone        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application JobApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  round       InterviewRound? @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([userId, applicationId])
+  @@index([roundId])
+}
