@@ -1,6 +1,8 @@
 # HuntPilot
 
 **HuntPilot** is a production-quality portfolio project: a modern **Job Application Pipeline Dashboard** that helps you track applications, manage follow-ups, prepare for interviews, and analyze your pipeline.
+<img width="2548" height="851" alt="image" src="https://github.com/user-attachments/assets/3c1ecf53-728a-48fd-8af4-eb821771724e" />
+
 
 ## Architecture (high level)
 
